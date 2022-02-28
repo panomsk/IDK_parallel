@@ -10,9 +10,6 @@
 
 #include "config.h"
 
-/*itemType DTW(itemType* Q, itemType* C);
-itemType DTW_ver1(itemType* Q, itemType* C, int r);
-itemType DTW_ver2(itemType* Q, itemType* C, int r);*/
-itemType DTW(itemType* q, itemType* c, int r);
+itemType DTW(itemType* Q, itemType* C, int r);
 
 #endif // DTW_H

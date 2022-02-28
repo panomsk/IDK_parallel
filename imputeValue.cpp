@@ -46,7 +46,7 @@ itemType impute(itemType* S, itemType** R, int h)
 	CalcLB(h);
 	
 	PRF_START(start7);
-	verticalOverlap(h);
+	verticalOverlap(h, use_corr);
 	int j = 0;
 	int rank_counts = 0;
 	while (j < k_par)
@@ -257,7 +257,6 @@ int CalcLB(int h)
 						N[i][CandIndex[j]] = DTW(Q[i], SetC[i][CandIndex[j]], r_par);
 						BitMap[i][CandIndex[j]] = false;
 
-						//!!подумать над оптимизацией
 						#pragma omp critical 
 						{
 							if (cur_dist > N[i][CandIndex[j]]) 
@@ -281,7 +280,7 @@ int CalcLB(int h)
 	return 0;
 }
 
-void verticalOverlap(int h)
+void verticalOverlap(int h, bool corr)
 {
 	int i ,j;
 		
@@ -294,7 +293,16 @@ void verticalOverlap(int h)
 			if (N[j][i] < inf_val)
 			{
 				//RANK[i] = RANK[i] + ((1 / N[j][i]) * (((d_par - j) + 1) / d_par));
-				RANK[i] = RANK[i] + ((1 / (N[j][i]+itemtype_epsilon)) * ((d_par - j) / d_par));
+				if(corr == true)
+				{
+					//вес зависит от номера опорного ряда (ряды отсортированы в порядке убывания корреляции с основным рядом)
+					RANK[i] = RANK[i] + ((1 / (N[j][i]+itemtype_epsilon)) * ((d_par - j) / d_par));
+				}
+				else
+				{
+					//веса всех опорных рядов одинаковые
+					RANK[i] = RANK[i] + (1 / (N[j][i]+itemtype_epsilon));
+				}
 			}
 		}
 	}

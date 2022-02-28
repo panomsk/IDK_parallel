@@ -15,16 +15,15 @@ itemType LbKeogh(itemType* Q, itemType* C, int r)
 	{ 
 		itemType max_lokal = Q[i];
 		itemType min_lokal = Q[i];
-		for (int j = i - r; j < (i + r); j++)
+		//!! исправлено значение верхней границы 
+		for (int j = max((i - r),0); j <= min((i + r),(l_par-1)); j++)
 		{
-			if (j >= 0 && j < l_par)
-			{
-				max_lokal = max(max_lokal, Q[j]);
-				min_lokal = min(min_lokal, Q[j]);
-			}
-			upper[i] = max_lokal;
-			lower[i] = min_lokal;
+			max_lokal = max(max_lokal, Q[j]);
+			min_lokal = min(min_lokal, Q[j]);
 		}
+		//!! вынесено во внешний цикл
+		upper[i] = max_lokal;
+		lower[i] = min_lokal;
 	}
 		
 	for (int i = 0; i < l_par; i++)
@@ -40,4 +39,4 @@ itemType LbKeogh(itemType* Q, itemType* C, int r)
 	}
 	//printf_s("%lf\n", lb_dist);
 	return lb_dist;
-}
+}   

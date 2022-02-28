@@ -13,7 +13,7 @@
 #include "profiler.h"
 
 itemType impute(itemType* S, itemType** R, int h);
-void verticalOverlap(int h); // 
+void verticalOverlap(int h, bool corr);
 void FillData(itemType* S, itemType** R, int h);
 void CslcZnorm(int h);
 int CalcLB(int h);

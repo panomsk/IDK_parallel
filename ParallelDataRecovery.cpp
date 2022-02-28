@@ -76,6 +76,10 @@ int main(int argc, char * argv[])
 	double stop = omp_get_wtime();
 
 	#ifdef PROFILE
+		printf("Params:\n");
+		printf("L_par;numimputevalue;d_par;l_par;k_par;r_par;use_corr\n");
+		printf("%d;%d;%d;%d;%d;%d;%d\n",L_par,numimputevalue,d_par,l_par,k_par,r_par,use_corr);
+
 		printf("Time for reading data from file = %.2lf%%\n", (finish1 - start1) / (stop - start) * 100);
 		printf("Time for FillData = %.2lf%%\n", (finish2 - start2) / (stop - start) * 100);
 		printf("Time for CslcZnorm = %.2lf%%\n", (finish3 - start3) / (stop - start) * 100);
