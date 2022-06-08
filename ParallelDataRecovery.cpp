@@ -51,6 +51,9 @@ int main(int argc, char * argv[])
 	read_timeseries(data_fname, S, R);
 	PRF_FINISH(finish1);
 	
+	//mas_to_csv(S, L_par + numimputevalue, "S");
+	//mas_to_csv(R[0], L_par + numimputevalue, "R_1");
+	
 	itemType S_predicted[numimputevalue];
 	itemType S_init[numimputevalue];
 
@@ -63,15 +66,13 @@ int main(int argc, char * argv[])
 		//S[L_par + i] = s;
 	}
 
-	#ifdef DEBUG
-		PRINT("RESULTS for csv export\n");
-		PRINT("S_init;S_predicted\n");
-		for (int i = 0; i < numimputevalue; i++)
-		{
-			PRINT("%lf;%lf\n", S_init[i], S_predicted[i]);
-		}	
-	#endif
-	
+	printf("RESULTS for csv export\n");
+	printf("S_init;S_predicted\n");
+	for (int i = 0; i < numimputevalue; i++)
+	{
+		printf("%lf;%lf\n", S_init[i], S_predicted[i]);
+	}	
+		
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end);
 	double stop = omp_get_wtime();
 
@@ -109,7 +110,7 @@ int main(int argc, char * argv[])
 		MAE=MSE=RMSE=0;
 		for (int i = 0; i < numimputevalue; i++)
 		{
-			MAE += abs(S_init[i]-S_predicted[i]);
+			MAE += fabs(S_init[i]-S_predicted[i]);
 			MSE += pow(S_init[i]-S_predicted[i], 2);
 		}
 		MAE = MAE/numimputevalue;

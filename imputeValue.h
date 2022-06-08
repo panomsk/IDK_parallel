@@ -17,7 +17,8 @@ void verticalOverlap(int h, bool corr);
 void FillData(itemType* S, itemType** R, int h);
 void CslcZnorm(int h);
 int CalcLB(int h);
-
+void mas_to_csv(itemType* mas, int len, const char* name);
+void LB_to_csv(int len);
 
 #endif // IMPUTEVALUE_H
 

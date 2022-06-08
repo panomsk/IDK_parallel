@@ -1,20 +1,20 @@
 #include "imputeValue.h"
 
 itemType Q[d_par][l_par];
-itemType SetC[d_par][(L_par - (2 * l_par)) + numimputevalue][l_par];
-itemType LB[d_par][(L_par - (2 * l_par)) + numimputevalue][num_lb];
+itemType SetC[d_par][subseq_count + numimputevalue][l_par];
+itemType LB[d_par][subseq_count + numimputevalue][num_lb];
 itemType bsf[d_par];
-itemType N[d_par][(L_par - (2 * l_par)) + numimputevalue];
-int CandIndex[(L_par - (2 * l_par)) + numimputevalue];
+itemType N[d_par][subseq_count + numimputevalue];
+int CandIndex[subseq_count + numimputevalue];
 int ind[k_par];
-itemType RANK[(L_par - (2 * l_par)) + numimputevalue];
-bool BitMap[d_par][(L_par - (2 * l_par)) + numimputevalue];
+itemType RANK[subseq_count + numimputevalue];
+bool BitMap[d_par][subseq_count + numimputevalue];
 extern int num_of_threads;
 extern int DTW_count;
 extern int LB_count;
 
 //!!проверка работы 
-//itemType RANK_test[(L_par - (2 * l_par)) + numimputevalue];
+//itemType RANK_test[subseq_count + numimputevalue];
 
 struct maxRank{
 	itemType Value;
@@ -25,6 +25,10 @@ struct maxRank{
 	omp_out.Indax = omp_in.Value < omp_out.Value ? omp_out.Indax : omp_in.Indax ) \
 	initializer( omp_priv = { 0, 0 } )
 
+#pragma omp declare reduction(min : struct maxRank : \
+	omp_out.Value = omp_in.Value > omp_out.Value ? omp_out.Value : omp_in.Value, \
+	omp_out.Indax = omp_in.Value > omp_out.Value ? omp_out.Indax : omp_in.Indax ) \
+	initializer( omp_priv = { inf_val, 0 } )
 
 itemType impute(itemType* S, itemType** R, int h)
 {
@@ -37,24 +41,33 @@ itemType impute(itemType* S, itemType** R, int h)
 	CslcZnorm(h);
 	PRF_FINISH(finish3);
 
-	//первое приближение bsf по произвольной серии опорного ряда после нормализации
-	for (int i = 0; i < d_par; i++)
-		bsf[i] = DTW(Q[i], SetC[i][(L_par - (3 * l_par))], r_par);
-	
-	//!! не используется
-	//if (CalcLB(h) == -1) s = S[L_par + h - 1];
+	//mas_to_csv(Q[0], l_par, "Q");
+	//mas_to_csv(SetC[0][0], l_par, "SetC[0][0]");
+	//mas_to_csv(SetC[0][subseq_count + h], l_par, "SetC[0][subseq_count+h]");
+	//mas_to_csv(bsf, d_par, "bsf");
+
+	//!! в настоящее время не используется
+	//вернуть значение предшествующее пропущенному
+	/*if (CalcLB(h) == -1) 
+	{
+		s = S[L_par + h - 1];
+		return s;
+	}*/
+
 	CalcLB(h);
 	
+	//LB_to_csv(subseq_count + h);
+	//mas_to_csv(RANK, subseq_count + h, "RANK");
+
 	PRF_START(start7);
 	verticalOverlap(h, use_corr);
-	int j = 0;
+	int i, j = 0;
 	int rank_counts = 0;
 	while (j < k_par)
 	{
 		struct maxRank maxRANK = {0, 0};
-		int i;
 		#pragma omp parallel for num_threads(num_of_threads) reduction (max: maxRANK)
-		for (i = 0; i < (L_par - (2 * l_par)) + h; i++)
+		for (i = 0; i <= subseq_count + h; i++)
 		{
 			if (maxRANK.Value < RANK[i])
 			{ 
@@ -65,7 +78,7 @@ itemType impute(itemType* S, itemType** R, int h)
 
 		//!!проверка работы редукции
 		/*struct maxRank test_rank = {0, 0};
-		for (i = 0; i < (L_par - (2 * l_par)) + h; i++)
+		for (i = 0; i <= subseq_count + h; i++)
 		{
 			if (test_rank.Value < RANK[i])
 			{ 
@@ -79,15 +92,15 @@ itemType impute(itemType* S, itemType** R, int h)
 		}*/
 
 
-
-
 		//добавлена проверка отличия максимального ранка от 0. Если 0, значит больше нет обсчитанных DTW
 		if(maxRANK.Value>0)
 		{
 			ind[j] = maxRANK.Indax;
 			int t;
 			// #pragma omp parallel for num_threads(num_of_threads)
-			for (t = max(0, (ind[j] - l_par)); t < min ((ind[j] + l_par),((L_par - (2 * l_par)) + h)); t++)
+			//!! перепроверить границы индексов. 
+			//Было for (t = max(0, (ind[j] - l_par)); t < min ((ind[j] + l_par),(subseq_count + h)); t++) 
+			for (t = max(0, (ind[j] - l_par)); t < min((ind[j] + l_par),(subseq_count + h + 1)); t++)
 			{
 				RANK[t] = 0;
 			}
@@ -98,21 +111,21 @@ itemType impute(itemType* S, itemType** R, int h)
 	}
 
 	//если нашли меньше рассчетных точек чем k_par
-	assert(rank_counts==k_par);
+	//assert(rank_counts==k_par);
 	//ниже представлено более слабое условие, поставить при постоянной сработке условия выше
-	//assert(rank_counts>0);
+	assert(rank_counts>0);
 
 	#ifdef DEBUG
 		//подсчет количества расчетов DTW
 		DTW_count += d_par;
-		LB_count += d_par*(L_par - (2 * l_par)) + h;	
+		LB_count += d_par*(subseq_count + h + 1);	
 		for (j = 0; j < d_par; j++)
 		{
-			for (int i = 0; i < (L_par - (2 * l_par)) + h; i++)
+			for (int i = 0; i <= subseq_count + h; i++)
 			{
 				if (N[j][i] < inf_val)
 				{
-					DTW_count += 1;
+					DTW_count++;
 				}
 			}
 		}
@@ -128,9 +141,9 @@ itemType impute(itemType* S, itemType** R, int h)
 		}
 	}
 	//если нашли меньше рассчетных точек чем k_par
-	assert((n==k_par)&&(k_par>=0));
+	//assert((n==k_par)&&(k_par>=0));
 	//ниже представлено более слабое условие, поставить при постоянной сработке условия выше
-	//assert(n>0);
+	assert(n>0);
 	
 	PRF_FINISH(finish7);
 	return s/n;
@@ -142,12 +155,12 @@ void FillData(itemType* S, itemType** R, int h)
 	for (j = 0; j < d_par; j++)
 	{
 		for (i = 0; i < l_par; i++)
-			//исправлено - последняя точка запроса - восстанавливаемая точка в основном ряду
-			Q[j][i] = R[j][L_par - l_par + i + h + 1];
+			//индекс последней точки запроса - индекс восстанавливаемой точки основного ряда
+			Q[j][i] = R[j][L_par - l_par + h + 1 + i];
 	}
 	for (i = 0; i < d_par; i++)
 	{
-		for (j = 0; j < (L_par - (2 * l_par)) + h; j++)
+		for (j = 0; j <= subseq_count + h; j++)
 		{
 			for (q = 0; q < l_par; q++)
 				SetC[i][j][q] = R[i][j + q];
@@ -155,31 +168,23 @@ void FillData(itemType* S, itemType** R, int h)
 	}
 	for (i = 0; i < d_par; i++)
 	{
-		for (j = 0; j < (L_par - (2 * l_par)) + h; j++)
+		for (j = 0; j <= subseq_count + h; j++)
 			N[i][j] = inf_val;
 	}
-
-	//не используется
-	/*for (i = 0; i < d_par; i++)
-	{
-		for (j = 0; j < (L_par - (2 * l_par)) + h; j++)
-			NInd[i][j] = -1;
-	}*/
 
 	for (i = 0; i < k_par; i++)
 		ind[i] = -1;
 	
-	for (j = 0; j < (L_par - (2 * l_par)) + h; j++)
+	for (j = 0; j <= subseq_count + h; j++)
 	{
 		RANK[j] = 0;
 	}
 
 	for (i = 0; i < d_par; i++)
 	{
-		for (j = 0; j < (L_par - (2 * l_par)) + h; j++)
+		for (j = 0; j <= subseq_count + h; j++)
 			BitMap[i][j] = true;
 	}
-	
 }
 
 void CslcZnorm(int h)
@@ -188,7 +193,7 @@ void CslcZnorm(int h)
 	#pragma omp parallel for num_threads(num_of_threads) collapse(2) 
 	for (i = 0; i < d_par; i++)
 	{
-		for (j = 0; j < (L_par - (2 * l_par)) + h; j++) 
+		for (j = 0; j <= subseq_count + h; j++) 
 			Z_norm(SetC[i][j], l_par);
 	}
 	#pragma omp parallel for num_threads(num_of_threads)
@@ -203,17 +208,54 @@ int CalcLB(int h)
 	int i,j,s,cnt,left,right;
 	itemType cur_dist;
 	PRF_START(start4);
-	#pragma omp parallel for num_threads(num_of_threads) collapse(2) private(j, i)
+	#pragma omp parallel for num_threads(num_of_threads) collapse(2)
 	for (i = 0; i < d_par; i++)
 	{
-		for (j = 0; j < ((L_par - (2 * l_par)) + h); j++)
+		for (j = 0; j <= subseq_count + h; j++)
 		{
 			LB[i][j][0] = LbKim(Q[i], SetC[i][j]);
 			LB[i][j][1] = LbKeogh(Q[i], SetC[i][j], r_par);
 			LB[i][j][2] = LbKeogh(SetC[i][j], Q[i], r_par);
+			LB[i][j][3] = max(LB[i][j][1], LB[i][j][2]);
 		}
 	}
 	PRF_FINISH(finish4);
+
+	//начальное приближение bsf
+	for (int i = 0; i < d_par; i++)
+	{
+		bsf[i] = inf_val;
+		if (init_bsf==0)
+		{
+			//в первой версии программы было так
+			bsf[i] = DTW(Q[i], SetC[i][(L_par - (3 * l_par) + h)], r_par) + itemtype_epsilon;
+			//printf("BSF вариант 1 (исходный):  subseq_num = %d, i = %d, bsf[i] = %f\n", (L_par - (3 * l_par) + h), i, bsf[i]);
+		}
+		else if (init_bsf==1)
+		{
+			//!!В качестве начального приближения берем подпоследовательность, 
+			//соответствующую точке основного ряда, предшествующей восстанавливаемой
+			//прибавляем машинный epsilon чтобы избежать ошибки в случае когда DTW и все LB = 0 (полное совпадение запроса и подпоследовательности)
+			bsf[i] = DTW(Q[i], SetC[i][subseq_count + h], r_par) + itemtype_epsilon;
+			//printf("BSF вариант 0 (предыдущая точка):  subseq_num = %d, i = %d, bsf[i] = %f\n", (subseq_count + h), i, bsf[i]);
+		}
+		else if (init_bsf==2)
+		{
+			//идея Яны
+			struct maxRank minLB = {inf_val, 0};
+			#pragma omp parallel for num_threads(num_of_threads) reduction (min: minLB)
+			for (j = 0; j <= subseq_count + h; j++)
+			{
+				if (minLB.Value > LB[i][j][3])
+				{ 
+					minLB.Value = LB[i][j][3];
+					minLB.Indax = j;
+				}
+			}
+			bsf[i] = DTW(Q[i], SetC[i][minLB.Indax], r_par) + itemtype_epsilon;
+			//printf("BSF вариант 2 (min LB[][3]):  subseq_num = %d, i = %d, bsf[i] = %f\n", minLB.Indax, i, bsf[i]);
+		}
+	}
 		
 	for (i = 0; i < d_par; i++)
 	{
@@ -221,25 +263,49 @@ int CalcLB(int h)
 		{
 			PRF_START(start5);
 			#pragma omp parallel for num_threads(num_of_threads)
-			for (j = 0; j < ((L_par - (2 * l_par)) + h); j++)
+			for (j = 0; j <= subseq_count + h; j++)
 			{
-				BitMap[i][j] = BitMap[i][j] && (bsf[i] > LB[i][j][0]) && (bsf[i] > LB[i][j][1]) && (bsf[i] > LB[i][j][2]);
+				BitMap[i][j] = BitMap[i][j] && (bsf[i] > LB[i][j][0]) && (bsf[i] > LB[i][j][3]);
 			}
 			cnt = 0;
-			for (j = 0; j < ((L_par - (2 * l_par)) + h); j++)
+
+			//среди пересекающихся кандидатов, выбираем кандидата с минимальным значением LB[][3]
+			if(cut_off_neighbors==true)
 			{
-				if (BitMap[i][j])
+				for (j = 0; j <= subseq_count + h; j++)
 				{
-					CandIndex[cnt] = j;
-					cnt += 1;
+					if (BitMap[i][j])
+					{
+						if ((cnt > 0) && ((j - CandIndex[cnt-1]) < l_par))
+						{
+ 							if (LB[i][j][3] < LB[i][CandIndex[cnt-1]][3])
+							{
+ 								CandIndex[cnt-1] = j;
+							} 
+						}
+						else
+						{
+							CandIndex[cnt] = j;
+							cnt++;
+						}
+					}
 				}
 			}
-
-			//!!printf("h = %d i = %d, cnt = %d bsf[i] = %f\n", h, i, cnt, bsf[i]);
-
+			else
+			{			
+				for (j = 0; j <= subseq_count + h; j++)
+				{
+					if (BitMap[i][j])
+					{
+						CandIndex[cnt] = j;
+						cnt++;
+					}
+				}
+			}
+			
+			//printf("h = %d i = %d, cnt = %d bsf[i] = %f\n", h, i, cnt, bsf[i]);
 			PRF_FINISH(finish5);
 			if (cnt == 0) break;
-			
 
 			PRF_START(start6);
 			s = 1;
@@ -252,21 +318,28 @@ int CalcLB(int h)
 				#pragma omp parallel for num_threads(num_of_threads)
 				for (j = left; j < right; j++)
 				{
-					if (BitMap[i][CandIndex[j]])
-					{
+					//!! убрал лишнюю проверку, т.к. мы подбираем кандидатов по данному условию
+					//if (BitMap[i][CandIndex[j]])
+					//{
 						N[i][CandIndex[j]] = DTW(Q[i], SetC[i][CandIndex[j]], r_par);
 						BitMap[i][CandIndex[j]] = false;
 
-						#pragma omp critical 
+						//перенес в отдельный цикл
+						//!!нет смысла использовать редукцию, количество потоков равно количеству эелементов массива 
+						/*#pragma omp critical 
 						{
 							if (cur_dist > N[i][CandIndex[j]]) 
 							{
 								cur_dist = N[i][CandIndex[j]];
 								//!!printf("cur_dist = %f  bsf[i] = %f  position = %d\n", cur_dist, bsf[i], CandIndex[j]);
 							}
-						}
-					}
+						}*/
+					//}
 				}
+				
+				for (j = left; j < right; j++)
+					if (cur_dist > N[i][CandIndex[j]]) cur_dist = N[i][CandIndex[j]];
+								
 				s+=1;
 				if ((right==cnt)||(bsf[i]>cur_dist)) 
 				{
@@ -288,7 +361,7 @@ void verticalOverlap(int h, bool corr)
 	for (j = 0; j < d_par; j++)
 	{
 		#pragma omp parallel for num_threads(num_of_threads)
-		for (i = 0; i < (L_par - (2 * l_par)) + h; i++)
+		for (i = 0; i <= subseq_count + h; i++)
 		{
 			if (N[j][i] < inf_val)
 			{
@@ -309,13 +382,13 @@ void verticalOverlap(int h, bool corr)
 
 	//проверка корректности параллельного вычисления Rank
 	/*
-	for (j = 0; j < (L_par - (2 * l_par)) + h; j++)
+	for (j = 0; j <= subseq_count + h; j++)
 	{
 		RANK_test[j] = 0;
 	}
 	for (j = 0; j < d_par; j++)
 	{
-		for (i = 0; i < (L_par - (2 * l_par)) + h; i++)
+		for (i = 0; i <= subseq_count + h; i++)
 		{
 			if (N[j][i] < inf_val)
 			{
@@ -324,7 +397,7 @@ void verticalOverlap(int h, bool corr)
 		}
 	}
 
-	for (i = 0; i < (L_par - (2 * l_par)) + h; i++)
+	for (i = 0; i <= subseq_count + h; i++)
 	{
 		if(RANK_test[i]!=RANK[i])
 		{
@@ -333,4 +406,28 @@ void verticalOverlap(int h, bool corr)
 	}*/
 	
 
+}
+
+//для теста
+void mas_to_csv(itemType* mas, int len, const char* name)
+{
+	PRINT("log_to_csv\n");
+	PRINT("%s",name);
+	PRINT("\n")
+	for (int i = 0; i < len-1; i++)
+	{
+		PRINT("%lf;", mas[i]);
+	}
+	PRINT("%lf\n", mas[len-1]);
+}
+
+void LB_to_csv(int len)
+{
+	//!!рассчитывается DTW для всех подпоследовательностей
+	int i=0;
+	PRINT("-----------------------------------LB-------------------------------\n");
+	PRINT("LbKim;LbKeogh(Q,C);LbKeogh(C,Q);max(LbKeogh(Q,C),LbKeogh(C,Q));DTW(Q,C)\n");
+	for (int j = 0; j <= len; j++)
+		PRINT("%lf;%lf;%lf;%lf;%lf\n", LB[i][j][0],LB[i][j][1],LB[i][j][2],LB[i][j][3], DTW(Q[i], SetC[i][j], r_par));
+	PRINT("--------------------------------------------------------------------\n");
 }
